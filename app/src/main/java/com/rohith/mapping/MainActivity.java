@@ -37,37 +37,46 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mapView = findViewById(R.id.mapView);
-        mapView.onCreate(savedInstanceState);
-        mapView.getMapAsync(this);
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                LOCATION_PERMISSION_REQUEST_CODE);
 
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            mapView = findViewById(R.id.mapView);
+            mapView.onCreate(savedInstanceState);
+            mapView.getMapAsync(this);
 
-        Button startTrackingButton = findViewById(R.id.startTrackingButton);
-        startTrackingButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                isTracking = true;
-                requestLocationUpdates();
-            }
-        });
+            locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
-        Button clearButton = findViewById(R.id.clearButton);
-        clearButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                clearAllLines();
-            }
-        });
+            Button startTrackingButton = findViewById(R.id.startTrackingButton);
+            startTrackingButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    isTracking = true;
+                    requestLocationUpdates();
+                }
+            });
 
-        Button stopTrackingButton = findViewById(R.id.stopTrackingButton);
-        stopTrackingButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                isTracking = false;
-                locationManager.removeUpdates(MainActivity.this);
-            }
-        });
+            Button clearButton = findViewById(R.id.clearButton);
+            clearButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    clearAllLines();
+                }
+            });
+
+            Button stopTrackingButton = findViewById(R.id.stopTrackingButton);
+            stopTrackingButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    isTracking = false;
+                    locationManager.removeUpdates(MainActivity.this);
+                }
+            });
+        }
+        else{
+            Toast.makeText(this, "Location permission is needed to display your location on the map.", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void clearAllLines() {
