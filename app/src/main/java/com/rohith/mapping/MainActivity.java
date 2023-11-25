@@ -2,6 +2,7 @@ package com.rohith.mapping;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -24,6 +25,8 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.PolylineOptions;
 
+import java.util.List;
+
 public class MainActivity extends FragmentActivity implements OnMapReadyCallback, LocationListener {
     private MapView mapView;
     private GoogleMap googleMap;
@@ -31,50 +34,60 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private LocationManager locationManager;
     private boolean isTracking = false;
+    private static final String POLYLINE_PREF_KEY = "polyline_coordinates";
+    private SharedPreferences sharedPreferences;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Request location permissions
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
                 LOCATION_PERMISSION_REQUEST_CODE);
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            mapView = findViewById(R.id.mapView);
-            mapView.onCreate(savedInstanceState);
-            mapView.getMapAsync(this);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
 
-            locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            // Initialize map view, location manager, and shared preferences
+        mapView = findViewById(R.id.mapView);
+        mapView.onCreate(savedInstanceState);
+        mapView.getMapAsync(this);
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        sharedPreferences = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this);
 
-            Button startTrackingButton = findViewById(R.id.startTrackingButton);
-            startTrackingButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    isTracking = true;
-                    requestLocationUpdates();
-                }
-            });
+        // Load previously saved polylines when the app starts
+        loadPolylineFromPrefs();
 
-            Button clearButton = findViewById(R.id.clearButton);
-            clearButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    clearAllLines();
-                }
-            });
+        // Initialize buttons and their click listeners
+        Button startTrackingButton = findViewById(R.id.startTrackingButton);
+        startTrackingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                isTracking = true;
+                requestLocationUpdates();
+            }
+        });
 
-            Button stopTrackingButton = findViewById(R.id.stopTrackingButton);
-            stopTrackingButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    isTracking = false;
-                    locationManager.removeUpdates(MainActivity.this);
-                }
-            });
-        }
-        else{
+        Button clearButton = findViewById(R.id.clearButton);
+        clearButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                clearAllLines();
+            }
+        });
+
+        Button stopTrackingButton = findViewById(R.id.stopTrackingButton);
+        stopTrackingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                isTracking = false;
+                locationManager.removeUpdates(MainActivity.this);
+            }
+        });
+
+         } else {
             Toast.makeText(this, "Location permission is needed to display your location on the map.", Toast.LENGTH_SHORT).show();
         }
     }
@@ -83,6 +96,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         if (googleMap != null && polylineOptions != null) {
             googleMap.clear();
             polylineOptions = null;
+            // Clear saved polyline coordinates
+            sharedPreferences.edit().remove(POLYLINE_PREF_KEY).apply();
         }
     }
 
@@ -117,16 +132,11 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         this.googleMap = googleMap;
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+            // TODO: Handle the case when permissions are not granted.
             return;
         }
         this.googleMap.setMyLocationEnabled(true);
+        loadPolylineFromPrefs();
     }
 
     @Override
@@ -142,10 +152,48 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     polylineOptions.width(5);
                     polylineOptions.color(Color.BLUE);
                 }
+
                 polylineOptions.add(currentLocation);
                 googleMap.addPolyline(polylineOptions);
-
                 googleMap.moveCamera(CameraUpdateFactory.newLatLng(currentLocation));
+
+                // Save updated polyline coordinates
+                savePolylineToPrefs();
+            }
+        }
+    }
+
+    private void savePolylineToPrefs() {
+        if (polylineOptions != null) {
+            List<LatLng> points = polylineOptions.getPoints();
+            StringBuilder stringBuilder = new StringBuilder();
+
+            for (LatLng point : points) {
+                stringBuilder.append(point.latitude).append(",").append(point.longitude).append(";");
+            }
+
+            sharedPreferences.edit().putString(POLYLINE_PREF_KEY, stringBuilder.toString()).apply();
+        }
+    }
+
+    private void loadPolylineFromPrefs() {
+        String polylineString = sharedPreferences.getString(POLYLINE_PREF_KEY, "");
+        if (!polylineString.isEmpty()) {
+            String[] pointsArray = polylineString.split(";");
+            polylineOptions = new PolylineOptions();
+            polylineOptions.width(5);
+            polylineOptions.color(Color.BLUE);
+
+            for (String pointString : pointsArray) {
+                String[] latLng = pointString.split(",");
+                double latitude = Double.parseDouble(latLng[0]);
+                double longitude = Double.parseDouble(latLng[1]);
+                LatLng point = new LatLng(latitude, longitude);
+                polylineOptions.add(point);
+            }
+
+            if (googleMap != null) {
+                googleMap.addPolyline(polylineOptions);
             }
         }
     }
